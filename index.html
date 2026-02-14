@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordle Clash</title>
+    <style>
+        :root {
+            --bg-dark: #121213;
+            --tile-border: #3a3a3c;
+            --correct: #538d4e;
+            --present: #b59f3b;
+            --absent: #3a3a3c;
+            --valentine: #e63946;
+        }
+
+        body {
+            background: linear-gradient(-45deg, #121213, #2a0a0a, #3d0a0a, #121213);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            color: white;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            flex-grow: 1;
+            transition: all 0.5s ease;
+        }
+
+        #title { font-size: 32px; margin: 10px 0; font-weight: bold; letter-spacing: 2px; text-align: center; }
+        #hint { color: #b1b3b4; margin-bottom: 20px; font-size: 16px; min-height: 1.5em; font-weight: bold; }
+
+        #board { display: flex; flex-direction: column; gap: 8px; margin-bottom: 30px; perspective: 1000px; cursor: pointer; }
+        .row { display: flex; gap: 8px; justify-content: center; }
+        .flip-up { transform: rotateX(-110deg) translateY(-50px); opacity: 0; transition: 0.8s ease-in-out; }
+
+        .tile {
+            width: 52px; height: 52px; border: 2px solid var(--tile-border);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 26px; font-weight: bold; text-transform: uppercase;
+            background: rgba(18, 18, 19, 0.9); box-sizing: border-box;
+        }
+
+        .green { background-color: var(--correct) !important; border: none !important; }
+        .yellow { background-color: var(--present) !important; border: none !important; }
+        .gray { background-color: var(--absent) !important; border: none !important; }
+        .red { 
+            background-color: var(--valentine) !important; 
+            border: none !important; 
+            animation: glow 1.5s infinite alternate; 
+        }
+
+        @keyframes glow { 
+            from { box-shadow: 0 0 5px #e63946; transform: scale(1); } 
+            to { box-shadow: 0 0 15px #ff4d6d; transform: scale(1.05); } 
+        }
+
+        #controls { display: none; gap: 15px; margin-bottom: 25px; }
+        .btn { padding: 12px 24px; border-radius: 30px; border: none; font-weight: bold; cursor: pointer; color: white; font-size: 14px; }
+
+        #keyboard { 
+            width: 100%; max-width: 500px; padding: 15px 5px; 
+            background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px);
+            border-radius: 15px; border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+        }
+        .keyboard-row { display: flex; justify-content: center; margin-bottom: 8px; width: 100%; }
+        .key {
+            background-color: #818384; color: white; border: none; border-radius: 4px;
+            margin: 0 3px; height: 58px; flex: 1; font-weight: bold;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            text-transform: uppercase; font-size: 13px; transition: 0.3s;
+        }
+        .key.large { flex: 1.5; }
+
+        #final-screen {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            flex-direction: column; align-items: center; justify-content: center; z-index: 100;
+            background: radial-gradient(circle, #2a0a0a 0%, #121213 100%);
+        }
+
+        .mail-icon { font-size: 80px; margin-bottom: 20px; animation: float 3s ease-in-out infinite; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+
+        .email-text { text-align: center; animation: fadeIn 2s ease-in; }
+        .email-text h2 { color: #ff4d6d; font-size: 32px; }
+        .email-text p { font-size: 18px; color: #ffccd5; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .click-hint { margin-top: 15px; font-size: 14px; color: var(--correct); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <audio id="snd-bg" src="bg-music.mp3" loop preload="auto"></audio>
+    <audio id="snd-type" src="type.mp3" preload="auto"></audio>
+    <audio id="snd-wrong" src="wrong.mp3" preload="auto"></audio>
+    <audio id="snd-reveal" src="reveal.mp3" preload="auto"></audio>
+    <audio id="snd-success" src="success.mp3" preload="auto"></audio>
+
+    <div id="game-container">
+        <h1 id="title">WORDLE</h1>
+        <p id="hint">Try to find the hidden word.</p>
+        <div id="board" onclick="handleBoardClick()"></div>
+        <div id="controls">
+            <button class="btn" style="background:var(--correct)" onclick="location.reload()">Play Again</button>
+            <button class="btn" style="background:var(--valentine)" onclick="triggerTransition()">Give Up?</button>
+        </div>
+        <div id="keyboard">
+            <div class="keyboard-row">
+                <button class="key" data-key="Q">Q</button><button class="key" data-key="W">W</button><button class="key" data-key="E">E</button><button class="key" data-key="R">R</button><button class="key" data-key="T">T</button><button class="key" data-key="Y">Y</button><button class="key" data-key="U">U</button><button class="key" data-key="I">I</button><button class="key" data-key="O">O</button><button class="key" data-key="P">P</button>
+            </div>
+            <div class="keyboard-row">
+                <button class="key" data-key="A">A</button><button class="key" data-key="S">S</button><button class="key" data-key="D">D</button><button class="key" data-key="F">F</button><button class="key" data-key="G">G</button><button class="key" data-key="H">H</button><button class="key" data-key="J">J</button><button class="key" data-key="K">K</button><button class="key" data-key="L">L</button>
+            </div>
+            <div class="keyboard-row">
+                <button class="key large" data-key="ENTER">ENTER</button><button class="key" data-key="Z">Z</button><button class="key" data-key="X">X</button><button class="key" data-key="C">C</button><button class="key" data-key="V">V</button><button class="key" data-key="B">B</button><button class="key" data-key="N">N</button><button class="key" data-key="M">M</button><button class="key large" data-key="BACK">⌫</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="final-screen">
+        <div class="mail-icon">💌</div>
+        <div class="email-text">
+            <h2>Success!</h2>
+            <p>I've sent a special message to your inbox.</p>
+            <p><strong>Check your email now!</strong></p>
+            <p id="signature" style="margin-top: 30px; font-weight: bold; font-size: 24px; color: #ff4d6d;"></p>
+        </div>
+    </div>
+
+    <script>
+        const firstAnswer = "JOLIE"; 
+        const secondAnswer = "YES";
+        const proposalChars = "WILLYOUBEMYVALENTINE";
+        let currentRow = 0, currentGuess = "", gameOver = false, secondPhase = false, waitingForClick = false, musicStarted = false;
+
+        const sndBg = document.getElementById("snd-bg");
+        const sndType = document.getElementById("snd-type");
+        const sndWrong = document.getElementById("snd-wrong");
+        const sndReveal = document.getElementById("snd-reveal");
+        const sndSuccess = document.getElementById("snd-success");
+
+        // Set low volume for background music
+        sndBg.volume = 0.2; 
+
+        function playSound(snd) { 
+            snd.currentTime = 0; 
+            snd.play().catch(e => {}); 
+        }
+
+        function startMusic() {
+            if (!musicStarted) {
+                sndBg.play().catch(() => {});
+                musicStarted = true;
+            }
+        }
+
+        function drawBoard() {
+            const board = document.getElementById("board");
+            board.innerHTML = "";
+            const rows = secondPhase ? 1 : 6;
+            const cols = secondPhase ? 3 : 5;
+            for (let r = 0; r < rows; r++) {
+                const row = document.createElement("div");
+                row.className = "row";
+                for (let c = 0; c < cols; c++) {
+                    const tile = document.createElement("div");
+                    tile.className = "tile";
+                    row.appendChild(tile);
+                }
+                board.appendChild(row);
+            }
+        }
+
+        function validateGuess() {
+            if (waitingForClick) return;
+            const row = document.getElementById("board").children[currentRow];
+            const goal = secondPhase ? secondAnswer : firstAnswer;
+
+            if (currentGuess !== goal) {
+                playSound(sndWrong);
+                if (secondPhase) {
+                    document.getElementById("hint").innerText = "Please say YES?";
+                    currentGuess = ""; 
+                    render();
+                } else if (currentRow === 5) {
+                    gameOver = true;
+                    document.getElementById("controls").style.display = "flex";
+                }
+            }
+            
+            for (let i = 0; i < currentGuess.length; i++) {
+                const char = currentGuess[i];
+                const tile = row.children[i];
+                const key = document.querySelector(`[data-key="${char}"]`);
+
+                if (char === goal[i]) tile.classList.add("green");
+                else if (goal.includes(char)) tile.classList.add("yellow");
+                else tile.classList.add("gray");
+
+                if (!secondPhase && key) {
+                    if (proposalChars.includes(char)) key.classList.add("yellow");
+                    else key.classList.add("gray");
+                }
+            }
+
+            if (secondPhase && currentGuess === "YES") {
+                gameOver = true;
+                playSound(sndSuccess);
+                sndBg.pause(); // Stop background music on final win
+                setTimeout(showFinalScreen, 1000);
+            } else if (!secondPhase) {
+                if (currentGuess === firstAnswer) {
+                    triggerTransition();
+                } else if (currentRow < 5) { 
+                    currentRow++; 
+                    currentGuess = ""; 
+                }
+            }
+        }
+
+        function triggerTransition() {
+            gameOver = true;
+            document.getElementById("controls").style.display = "none";
+            playSound(sndReveal); 
+            
+            Array.from(document.getElementById("board").children).forEach((row, i) => {
+                setTimeout(() => row.classList.add("flip-up"), i * 100);
+            });
+
+            setTimeout(() => {
+                const board = document.getElementById("board");
+                board.innerHTML = "";
+                document.getElementById("title").innerText = "Will You Be My Valentine?"; 
+                
+                const layout = ["WILL", "YOU", "BE", "MY", "VALENTINE?"];
+                layout.forEach(word => {
+                    const row = document.createElement("div");
+                    row.className = "row";
+                    word.split("").forEach(char => {
+                        const tile = document.createElement("div");
+                        tile.className = "tile red";
+                        tile.textContent = char;
+                        row.appendChild(tile);
+                    });
+                    board.appendChild(row);
+                });
+
+                const clickHint = document.createElement("p");
+                clickHint.className = "click-hint";
+                clickHint.innerText = "Click the board to continue";
+                board.appendChild(clickHint);
+
+                waitingForClick = true;
+            }, 1000);
+        }
+
+        function handleBoardClick() {
+            startMusic();
+            if (waitingForClick) {
+                waitingForClick = false;
+                startSecondPhase();
+            }
+        }
+
+        function startSecondPhase() {
+            secondPhase = true; 
+            gameOver = false; 
+            currentRow = 0; 
+            currentGuess = "";
+            document.getElementById("title").innerText = "Final Answer?";
+            document.getElementById("hint").innerText = "Type your response:";
+            drawBoard();
+
+            document.querySelectorAll(".key").forEach(k => {
+                k.classList.remove("yellow", "gray", "green");
+                const val = k.dataset.key;
+                if (["Y", "E", "S"].includes(val)) k.classList.add("yellow");
+                else if (["N", "O"].includes(val)) k.classList.add("gray");
+            });
+        }
+
+        function showFinalScreen() {
+            document.getElementById("game-container").style.opacity = "0";
+            setTimeout(() => {
+                document.getElementById("game-container").style.display = "none";
+                document.getElementById("final-screen").style.display = "flex";
+            }, 500);
+        }
+
+        function render() {
+            const row = document.getElementById("board").children[currentRow];
+            if (!row || waitingForClick) return;
+            for (let i = 0; i < row.children.length; i++) row.children[i].textContent = currentGuess[i] || "";
+        }
+
+        function processInput(key) {
+            startMusic(); // Start music on first key press
+            if (gameOver || waitingForClick) return;
+            const limit = secondPhase ? 3 : 5;
+            if (key === "ENTER") { 
+                if (currentGuess.length === limit) validateGuess(); 
+                else playSound(sndType); 
+            }
+            else if (key === "BACK" || key === "BACKSPACE") { 
+                currentGuess = currentGuess.slice(0, -1); 
+                render(); 
+            }
+            else if (currentGuess.length < limit && /^[A-Z]$/.test(key)) { 
+                currentGuess += key; 
+                render(); 
+                playSound(sndType); 
+            }
+        }
+
+        drawBoard();
+        document.querySelectorAll(".key").forEach(k => k.onclick = () => processInput(k.dataset.key));
+        document.addEventListener("keydown", (e) => processInput(e.key.toUpperCase()));
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    
+    <script src="script.js"></script>
+</body>
+</html>
