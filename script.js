@@ -1,37 +1,47 @@
-// 1. Setup your IDs at the top
-const PUBLIC_KEY = "JKqFqwhz7D98snEv6"; 
+// --- CONFIGURATION ---
+const PUBLIC_KEY = "a8ICeA2dOVOGUaZb7"; // Your NEW Public Key
 const SERVICE_ID = "service_deqbac8";
 const TEMPLATE_ID = "template_nef26y9";
 
-// 2. Initialize EmailJS
-emailjs.init(PUBLIC_KEY);
+// --- GITHUB INITIALIZATION ---
+// This waits for the page and the EmailJS library to be 100% ready
+window.onload = function() {
+    if (typeof emailjs !== 'undefined') {
+        emailjs.init(PUBLIC_KEY);
+        console.log("EmailJS Initialized with NEW key!");
+    } else {
+        alert("CRITICAL: EmailJS library failed to load. Check your index.html link!");
+    }
+};
 
-// ... (Your other game variables like firstAnswer, currentRow, etc.) ...
-
-// 3. The function that triggers the email
 function sendTheEmail() {
-    // This is the line you requested, integrated into the script
+    console.log("Attempting to send using NEW key...");
+    
+    // The specific line you need
     emailjs.send(SERVICE_ID, TEMPLATE_ID)
     .then((response) => {
-       console.log("Email sent successfully!", response.status, response.text);
+        console.log("SUCCESS!", response.status, response.text);
     })
-    .catch((error) => {
-       console.error("Failed to send email:", error);
+    .catch((err) => {
+        console.error("FAILED...", err);
+        // If it fails on GitHub, this will tell you exactly why
+        alert("Send Error: " + JSON.stringify(err));
     });
 }
 
-// 4. Update your victory function
+// --- VICTOR SCREEN TRIGGER ---
 function showFinalScreen() {
-    // Call the email function here
-    sendTheEmail();
+    sendTheEmail(); // Fires the email command
 
-    // Your existing code to change the screen
-    document.getElementById("game-container").style.opacity = "0";
+    const container = document.getElementById("game-container");
+    if(container) container.style.opacity = "0";
+    
     setTimeout(() => {
-        document.getElementById("game-container").style.display = "none";
-        document.getElementById("final-screen").style.display = "flex";
-        document.getElementById("signature").innerText = "- Forever Yours"; 
+        if(container) container.style.display = "none";
+        const final = document.getElementById("final-screen");
+        if(final) final.style.display = "flex";
+        
+        const sig = document.getElementById("signature");
+        if(sig) sig.innerText = "- Yours Truly"; 
     }, 500);
 }
-
-// ... (The rest of your Wordle logic) ...
